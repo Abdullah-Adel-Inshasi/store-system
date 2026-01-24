@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -48,6 +49,7 @@ export const inventoryItems = pgTable("inventory_items", {
   averageCost: decimal("average_cost", { precision: 12, scale: 2 }).notNull(),
   minQuantity: integer("min_quantity").default(0),
   createdAt: timestamp("created_at").defaultNow(),
+  deletedAt: timestamp("deleted_at").default(sql`null`),
 });
 
 export const inventoryMovements = pgTable("inventory_movements", {
