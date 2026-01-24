@@ -12,11 +12,18 @@ export interface CreateItemInput {
   minQuantity?: number;
 }
 
-export interface StockInInput {
+export interface StockMovement {
   itemId: number;
-  type: "IN";
   quantity: number;
-  unitCost: number;
-  sourceType: MovementSourceType;
+  sourceType?: MovementSourceType;
   sourceId: number | null;
+}
+
+export interface StockInInput extends StockMovement {
+  type: "IN";
+  unitCost: number;
+}
+
+export interface StockOutInput extends StockMovement {
+  type: "OUT";
 }
