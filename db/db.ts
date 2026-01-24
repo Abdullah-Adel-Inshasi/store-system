@@ -1,3 +1,4 @@
+import { drizzle } from "drizzle-orm/node-postgres";
 import pkg from "pg";
 const { Pool } = pkg;
 
@@ -8,3 +9,5 @@ export const pool = new Pool({
   database: "mydb",
   password: "postgre",
 });
+
+export const db = drizzle(pool);
