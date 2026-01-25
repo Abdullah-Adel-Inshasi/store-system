@@ -1,11 +1,13 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { db } from "../../db/db";
-import { inventoryItems, inventoryMovements } from "../../db/schema";
+import { Decimal } from "decimal.js";
 import {
   CreateItemInput,
   StockInInput,
+  StockMovement,
   StockOutInput,
 } from "./inventory.types";
+import { db } from "../../db/db";
+import { inventoryItems, inventoryMovements } from "../../db/schema";
 
 export async function createItem({
   name,
@@ -15,7 +17,12 @@ export async function createItem({
 }: CreateItemInput) {
   const [item] = await db
     .insert(inventoryItems)
-    .values({ name, unit, averageCost: averageCost.toString(), minQuantity })
+    .values({
+      name,
+      unit,
+      averageCost: averageCost.toString(),
+      minQuantity: minQuantity.toString(),
+    })
     .returning();
   return item;
 }
@@ -28,70 +35,55 @@ export async function stockIn(input: StockInInput) {
     sourceType = "manual",
     unitCost,
   } = input;
-  validateQuantity(quantity);
+  validateQuantity(new Decimal(quantity));
 
   await db.transaction(async (tx) => {
-    const {
-      rows: [item],
-    } = await tx.execute<InventoryItemRow>(sql`
-      SELECT *
-      FROM inventory_items
-      WHERE id = ${itemId}
-        AND deleted_at IS NULL
-      FOR UPDATE
-    `);
+    const item = await getAndLockItemById(tx, itemId);
 
-    if (!item) throw new Error("ITEM_NOT_FOUND_OR_ARCHIVED");
     await tx.insert(inventoryMovements).values({
       itemId,
-      quantity,
+      quantity: quantity.toString(),
       type: "IN",
       sourceId,
       unitCost: unitCost.toString(),
       sourceType,
     });
-    await tx
-      .update(inventoryItems)
-      .set({
-        currentQuantity: sql`${inventoryItems.currentQuantity} + ${quantity}`,
-      })
-      .where(eq(inventoryItems.id, itemId));
+    increaseStock(tx, item.id, quantity);
   });
 }
 
 export async function stockOut(input: StockOutInput) {
   const { itemId, quantity, sourceId, sourceType = "manual" } = input;
 
-  validateQuantity(quantity);
+  validateQuantity(new Decimal(quantity));
 
   await db.transaction(async (tx) => {
     // lock + load the item
     const item = await getAndLockItemById(tx, itemId);
 
-    //business rule 
-    if (item.currentQuantity < quantity) throw new Error("INSUFFICIENT_STOCK");
+    //business rule
+    assertSufficientStock(
+      new Decimal(item.currentQuantity),
+      new Decimal(quantity),
+    );
 
     await tx.insert(inventoryMovements).values({
       itemId,
       type: "OUT",
-      quantity,
+      quantity: quantity.toString(),
       sourceType,
       sourceId,
     });
 
-    await tx
-      .update(inventoryItems)
-      .set({
-        currentQuantity: sql`inventoryItems.currentQuantity - ${quantity}`,
-      })
-      .where(eq(inventoryItems.id, itemId));
+    decreaseStock(tx, item.id, quantity);
   });
 }
 
-function validateQuantity(quantity: number) {
-  if (quantity <= 0) {
-    throw new Error("Quantity must be greater then zero");
+function validateQuantity(quantity: Decimal) {
+  if (!quantity.isFinite() || quantity.lte(0)) {
+    throw new Error("INVALID_QUANTITY");
   }
+  return quantity;
 }
 
 export async function getItemById(
@@ -128,6 +120,36 @@ async function getAndLockItemById(tx: DBTransaction, itemId: number) {
 
   if (!item) throw new Error("ITEM_NOT_FOUND_OR_ARCHIVED");
   return item;
+}
+
+function assertSufficientStock(available: Decimal, toRemove: Decimal) {
+  if (!toRemove.isFinite() || toRemove.lte(0))
+    throw new Error("INVALID_QUANTITY");
+  if (available.lt(toRemove)) throw new Error("INSUFFICIENT_STOCK");
+}
+
+async function increaseStock(
+  tx: DBTransaction,
+  itemId: InventoryItemRow["id"],
+  quantity: StockMovement["quantity"],
+) {
+  tx.update(inventoryItems)
+    .set({
+      currentQuantity: sql`${inventoryItems.currentQuantity} + ${quantity}`,
+    })
+    .where(eq(inventoryItems.id, itemId));
+}
+
+async function decreaseStock(
+  tx: DBTransaction,
+  itemId: InventoryItemRow["id"],
+  quantity: StockMovement["quantity"],
+) {
+  tx.update(inventoryItems)
+    .set({
+      currentQuantity: sql`${inventoryItems.currentQuantity} - ${quantity}`,
+    })
+    .where(eq(inventoryItems.id, itemId));
 }
 
 type InventoryItemRow = typeof inventoryItems.$inferSelect;
