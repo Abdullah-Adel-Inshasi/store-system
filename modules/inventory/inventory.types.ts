@@ -27,3 +27,7 @@ export interface StockInInput extends StockMovement {
 export interface StockOutInput extends StockMovement {
   type: "OUT";
 }
+
+export interface ArchiveItemInput {
+  itemId: number;
+}

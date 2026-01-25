@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../db/db";
 import { inventoryItems, inventoryMovements } from "../../db/schema";
 import {
@@ -31,6 +31,17 @@ export async function stockIn(input: StockInInput) {
   validateQuantity(quantity);
 
   await db.transaction(async (tx) => {
+    const {
+      rows: [item],
+    } = await tx.execute<InventoryItemRow>(sql`
+      SELECT *
+      FROM inventory_items
+      WHERE id = ${itemId}
+        AND deleted_at IS NULL
+      FOR UPDATE
+    `);
+
+    if (!item) throw new Error("ITEM_NOT_FOUND_OR_ARCHIVED");
     await tx.insert(inventoryMovements).values({
       itemId,
       quantity,
@@ -42,7 +53,7 @@ export async function stockIn(input: StockInInput) {
     await tx
       .update(inventoryItems)
       .set({
-        currentQuantity: sql`inventoryItems.currentQuantity + ${quantity}`,
+        currentQuantity: sql`${inventoryItems.currentQuantity} + ${quantity}`,
       })
       .where(eq(inventoryItems.id, itemId));
   });
@@ -50,19 +61,17 @@ export async function stockIn(input: StockInInput) {
 
 export async function stockOut(input: StockOutInput) {
   const { itemId, quantity, sourceId, sourceType = "manual" } = input;
+
   validateQuantity(quantity);
 
   await db.transaction(async (tx) => {
-    const [item] = await tx
-      .select()
-      .from(inventoryItems)
-      .where(eq(inventoryItems.id, itemId))
-      .limit(1);
+    // lock + load the item
+    const item = await getAndLockItemById(tx, itemId);
 
-    if (!item) throw new Error("Item not found");
-    if (item.currentQuantity < quantity) throw new Error("Insuffecient stock");
+    //business rule 
+    if (item.currentQuantity < quantity) throw new Error("INSUFFICIENT_STOCK");
 
-    tx.insert(inventoryMovements).values({
+    await tx.insert(inventoryMovements).values({
       itemId,
       type: "OUT",
       quantity,
@@ -70,7 +79,8 @@ export async function stockOut(input: StockOutInput) {
       sourceId,
     });
 
-    tx.update(inventoryItems)
+    await tx
+      .update(inventoryItems)
       .set({
         currentQuantity: sql`inventoryItems.currentQuantity - ${quantity}`,
       })
@@ -83,3 +93,42 @@ function validateQuantity(quantity: number) {
     throw new Error("Quantity must be greater then zero");
   }
 }
+
+export async function getItemById(
+  id: number,
+  options?: { includeArchived?: boolean },
+) {
+  const whereClause = options?.includeArchived
+    ? eq(inventoryItems, id)
+    : and(eq(inventoryItems, id), isNull(inventoryItems.deletedAt));
+
+  const [item] = await db
+    .select()
+    .from(inventoryItems)
+    .where(whereClause)
+    .limit(1);
+
+  if (!item) {
+    throw new Error("ITEM_NOT_FOUND");
+  }
+
+  return item;
+}
+
+async function getAndLockItemById(tx: DBTransaction, itemId: number) {
+  const {
+    rows: [item],
+  } = await tx.execute<InventoryItemRow>(sql`
+      SELECT *
+      FROM inventory_items
+      WHERE id = ${itemId}
+      AND deleted_at IS NULL 
+      FOR UPDATE
+      `);
+
+  if (!item) throw new Error("ITEM_NOT_FOUND_OR_ARCHIVED");
+  return item;
+}
+
+type InventoryItemRow = typeof inventoryItems.$inferSelect;
+export type DBTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
