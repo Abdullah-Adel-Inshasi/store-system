@@ -6,8 +6,9 @@ import {
   StockMovement,
   StockOutInput,
 } from "./inventory.types";
-import { db } from "../../db/db";
-import { inventoryItems, inventoryMovements } from "../../db/schema";
+import { db } from "@/db/db";
+import { inventoryItems, inventoryMovements } from "@/db/schema";
+import { ERRORS } from "@/config/constants";
 
 export async function createItem({
   name,
@@ -35,6 +36,7 @@ export async function stockIn(input: StockInInput) {
     sourceType = "manual",
     unitCost,
   } = input;
+
   validateQuantity(new Decimal(quantity));
 
   await db.transaction(async (tx) => {
@@ -81,7 +83,7 @@ export async function stockOut(input: StockOutInput) {
 
 function validateQuantity(quantity: Decimal) {
   if (!quantity.isFinite() || quantity.lte(0)) {
-    throw new Error("INVALID_QUANTITY");
+    throw new Error(ERRORS.INVALID_QUANTITY);
   }
   return quantity;
 }
@@ -100,9 +102,7 @@ export async function getItemById(
     .where(whereClause)
     .limit(1);
 
-  if (!item) {
-    throw new Error("ITEM_NOT_FOUND");
-  }
+  assertItemIsActive(item);
 
   return item;
 }
@@ -118,7 +118,7 @@ async function getAndLockItemById(tx: DBTransaction, itemId: number) {
       FOR UPDATE
       `);
 
-  if (!item) throw new Error("ITEM_NOT_FOUND_OR_ARCHIVED");
+  if (!item) throw new Error(ERRORS.ITEM_NOT_FOUND_OR_ARCHIVED);
   return item;
 }
 
@@ -127,6 +127,12 @@ function assertSufficientStock(available: Decimal, toRemove: Decimal) {
     throw new Error("INVALID_QUANTITY");
   if (available.lt(toRemove)) throw new Error("INSUFFICIENT_STOCK");
 }
+
+function assertItemIsActive(item?: InventoryItemRow) {
+  if (item?.deletedAt !== null) throw new Error("ITEM_ARCHIVED");
+}
+
+function assertItemIsFound(item: InventoryItemRow) {}
 
 async function increaseStock(
   tx: DBTransaction,

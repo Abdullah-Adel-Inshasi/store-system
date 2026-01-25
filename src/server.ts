@@ -1,11 +1,14 @@
 import express, { type Request, type Response } from "express";
-import { pool } from "../db/db.ts";
+import { pool } from "@/db/db.ts";
 import {
   StockAdjustmentInput,
   stockAdjustmentSchema,
-} from "../schemas/stockAdjustments.schema.ts";
-import { validate } from "../middlewares/validate.ts";
-import { salesSchema, SalesSchemaInput } from "../modules/sales/sales.schema.ts";
+} from "@/schemas/stockAdjustments.schema.ts";
+import { validate } from "@/middlewares/validate.ts";
+import {
+  salesSchema,
+  SalesSchemaInput,
+} from "@/modules/sales/sales.schema.ts";
 
 const app = express();
 app.use(express.json());
