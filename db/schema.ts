@@ -45,9 +45,13 @@ export const inventoryItems = pgTable("inventory_items", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   unit: varchar("unit", { length: 50 }).notNull(),
-  currentQuantity: integer("current_quantity").default(0).notNull(),
+  currentQuantity: decimal("current_quantity", { precision: 14, scale: 3 })
+    .default("0")
+    .notNull(),
   averageCost: decimal("average_cost", { precision: 12, scale: 2 }).notNull(),
-  minQuantity: integer("min_quantity").default(0),
+  minQuantity: decimal("min_quantity", { precision: 14, scale: 3 }).default(
+    "0",
+  ),
   createdAt: timestamp("created_at").defaultNow(),
   deletedAt: timestamp("deleted_at").default(sql`null`),
 });
@@ -58,7 +62,7 @@ export const inventoryMovements = pgTable("inventory_movements", {
     .references(() => inventoryItems.id)
     .notNull(),
   type: varchar("type", { length: 10 }).notNull(), // IN | OUT | ADJUST
-  quantity: integer("quantity").notNull(),
+  quantity: decimal("quantity", { precision: 14, scale: 3 }).notNull(),
   unitCost: decimal("unit_cost", { precision: 12, scale: 2 }),
   sourceType: varchar("source_type", { length: 50 }), // sale, purchase, damage, manual
   sourceId: integer("source_id"),
