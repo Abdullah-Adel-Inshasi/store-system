@@ -1,5 +1,5 @@
 import { decimalConfiguration } from "@/config/db.helpers";
-import { InferInsertModel, InferSelectModel, sql } from "drizzle-orm";
+import {  sql } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -51,16 +51,13 @@ export const moneyMovements = pgTable(
     reason: varchar("reason", { length: 100 }).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => ({
+  ({ amount }) => ({
     nonZeroAmount: check(
       "money_movements_non_zero_amount",
-      sql`${table.amount} <> 0`,
+      sql`${amount} <> 0`,
     ),
   }),
 );
-
-export type MoneyMovementsInsertType = InferInsertModel<typeof moneyMovements>;
-export type MoneyMovementsSelectType = InferSelectModel<typeof moneyMovements>;
 
 export const accountBalances = pgTable("account_balances", {
   accountId: uuid("account_id")
@@ -69,10 +66,3 @@ export const accountBalances = pgTable("account_balances", {
   balance: decimal("balance", decimalConfiguration).default("0").notNull(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
-
-export type AccountBalancesInsertType = InferInsertModel<
-  typeof accountBalances
->;
-export type AccountBalancesSelectType = InferSelectModel<
-  typeof accountBalances
->;

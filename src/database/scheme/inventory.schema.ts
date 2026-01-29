@@ -3,7 +3,6 @@ import { sql } from "drizzle-orm";
 import {
   pgTable,
   varchar,
-  integer,
   decimal,
   timestamp,
   uuid,
@@ -29,7 +28,7 @@ export const inventoryMovements = pgTable(
     qtyChange: decimal("qty_change", decimalConfiguration).notNull(),
     unitCost: decimal("unit_cost", decimalConfiguration),
 
-    refId: integer("ref_id"),
+    refId: uuid("ref_id"),
     refType: varchar("ref_type", { length: 50 }), // sale, purchase, damage, manual
 
     createdAt: timestamp("created_at").notNull().defaultNow(),
