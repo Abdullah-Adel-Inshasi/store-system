@@ -1,10 +1,21 @@
-import { inventoryItems, inventoryMovements } from "@/src/database/scheme";
-import { inventoryBalances } from "@/src/database/scheme/inventory.schema";
-import { withTransaction } from "@/src/database/transaction";
 import Decimal from "decimal.js";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
+import { withTransaction } from "@/src/database/transaction";
+import { inventoryBalances } from "@/src/database/scheme/inventory.schema";
+import { inventoryItems, inventoryMovements } from "@/src/database/scheme";
+import { db } from "@/src/database/db";
+import { DomainError } from "@/src/core/errors/DomainError";
 
-export async function createItem({
+export async function getInventoryItems() {
+  return await withTransaction<(typeof inventoryItems.$inferSelect)[]>(
+    async (tx) => {
+      const items = await tx.select().from(inventoryItems);
+      return items;
+    },
+  );
+}
+
+export async function insertItem({
   name,
   unit,
 }: typeof inventoryItems.$inferInsert): Promise<
@@ -12,23 +23,29 @@ export async function createItem({
 > {
   return await withTransaction(async (tx) => {
     if (!name) {
-      throw new Error("NAME_IS_EMPTY");
+      throw new DomainError({
+        code: "400",
+        domain: "",
+        message: "NAME_IS_EMPTY",
+        status: 400,
+      });
     }
 
     if (!["kg", "g", "m", "piece"].includes(unit)) {
-      throw new Error("INVALID_UNIT");
+      throw new DomainError({
+        code: "400",
+        domain: "",
+        message: "INVALID_UNIT",
+        status: 400,
+      });
     }
 
-    const [item] = await tx
+    const [item]: (typeof inventoryItems.$inferSelect)[] = await tx
       .insert(inventoryItems)
       .values({ name, unit })
       .returning();
 
-    if (!item) {
-      throw new Error("SERVER_ERROR");
-    }
-
-    return item;
+    return item!;
   });
 }
 
@@ -148,3 +165,18 @@ export async function removeItemQuantity({
   refType: string;
   refId?: string;
 }) {}
+
+export async function InventoryBalanceList() {
+  return db
+    .select({
+      itemId: inventoryItems.id,
+      name: inventoryItems.name,
+      unit: inventoryItems.unit,
+      qtyOnHand: inventoryBalances.qtyOnHand,
+      avgCost: inventoryBalances.avgCost,
+    })
+    .from(inventoryBalances)
+    .innerJoin(inventoryItems, eq(inventoryItems.id, inventoryBalances.itemId))
+    .where(eq(inventoryItems.isActive, true))
+    .orderBy(desc(inventoryItems.name));
+}
