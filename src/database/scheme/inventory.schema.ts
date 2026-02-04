@@ -1,4 +1,3 @@
-import { decimalConfiguration } from "@/config/db.helpers";
 import { sql } from "drizzle-orm";
 import {
   pgTable,
@@ -9,6 +8,7 @@ import {
   check,
   boolean,
 } from "drizzle-orm/pg-core";
+import { decimalConfiguration } from "./constants";
 
 export const inventoryItems = pgTable("inventory_items", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
 import { withTransaction } from "@/src/database/transaction";
 import { SellCashInput } from "./sales.types";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/src/database/scheme/cash.schema";
 import { saleItems, sales } from "@/src/database/scheme/sales.schema";
 import Decimal from "decimal.js";
+import { db } from "@/src/database/db";
 
 export async function sellCash({
   accountId,
@@ -101,4 +102,8 @@ export async function sellCash({
 
     return { saleId: sale?.id, inventory: updatedInventory, cash: updatedCash };
   });
+}
+
+export async function getSales() {
+  return db.select().from(sales).orderBy(desc(sales.soldAt));
 }

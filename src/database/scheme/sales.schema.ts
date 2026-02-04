@@ -10,7 +10,7 @@ import {
 import { inventoryItems } from "./inventory.schema";
 import { sql } from "drizzle-orm";
 import { accounts } from "./cash.schema";
-import { decimalConfiguration } from "@/config/db.helpers";
+import { decimalConfiguration } from "./constants";
 
 export const sales = pgTable("sales", {
   id: uuid("id").primaryKey().defaultRandom(),

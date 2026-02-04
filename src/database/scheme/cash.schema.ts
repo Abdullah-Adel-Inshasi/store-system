@@ -1,5 +1,4 @@
-import { decimalConfiguration } from "@/config/db.helpers";
-import {  sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -10,12 +9,11 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+import { decimalConfiguration } from "./constants";
 
 export const accounts = pgTable("accounts", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   name: varchar("name", { length: 100 }).notNull(),
-  type: varchar("type", { length: 10 }).notNull(), // cash / bank
-  currency: varchar("currency", { length: 3 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -27,8 +25,10 @@ export const bankAccountDetails = pgTable(
       .primaryKey()
       .references(() => accounts.id),
     phone: varchar("phone", { length: 20 }).notNull(),
-    provider: varchar("provider", { length: 50 }).notNull(),
+    provider: varchar("provider", { length: 50 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    type: varchar("type", { length: 10 }).notNull(), // cash / Bank Account
+    currency: varchar("currency", { length: 3 }).notNull(),
   },
   (table) => ({
     phoneProviderUnique: unique("bank_account_phone_provider_unique").on(

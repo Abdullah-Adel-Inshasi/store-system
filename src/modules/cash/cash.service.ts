@@ -1,5 +1,6 @@
 import {
   accountBalances,
+  accounts,
   moneyMovements,
 } from "@/src/database/scheme/cash.schema";
 import { withTransaction } from "@/src/database/transaction";
@@ -7,6 +8,54 @@ import Decimal from "decimal.js";
 import { eq, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { CashDomainError } from "./cash.errors";
+import { ERRORS_AR } from "@/src/locales/ar";
+import { DomainError } from "@/src/core/errors/DomainError";
+
+export async function createAccount({ name }: typeof accounts.$inferInsert) {
+  return withTransaction(async (tx) => {
+    const [account] = await tx.insert(accounts).values({ name }).returning();
+
+    return account;
+  });
+}
+
+interface PaymentMethod {
+  type: "cash";
+  currency: "ILS" | "USD" | "JOD" | Object;
+}
+
+interface EServicePaymentMethod extends PaymentMethod {
+  currency: PaymentMethod["currency"] | "AUD" | "CAD";
+  IBAN: string;
+  provider: "PayPal" | "BOP" | "Islamic Bank";
+}
+
+export async function addPaymentMethod({
+  accountId,
+  paymentMethod,
+}: {
+  accountId: string;
+  paymentMethod: PaymentMethod | EServicePaymentMethod;
+}) {
+  return await withTransaction(async (tx) => {
+    const [account] = await tx
+      .select()
+      .from(accounts)
+      .where(eq(accounts.id, accountId));
+
+    if (!account) {
+      throw new DomainError({
+        code: "ACCOUNT_NOT_FOUND",
+        domain: "CASH SERVICE",
+        message: ERRORS_AR.ACCOUNT_NOT_FOUND,
+        status: 400,
+      });
+
+      //future: only people above 18 can add an e-service payment method
+      await tx.insert(accountBalances);
+    }
+  });
+}
 
 export async function deposit({
   accountId,
